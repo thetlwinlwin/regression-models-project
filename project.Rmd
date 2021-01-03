@@ -1,0 +1,177 @@
+---
+title: "Factors affecting Mile per Gallons of Motors"
+author: "ThetLwinLwin"
+date: "1/3/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary 
+
+In this project we will explore the relationship between a set of variables and miles per gallon (MPG) (outcome). We are particularly interested in the following two questions:
+- 'is an automatic or manaual transmission better for MPG'
+- 'Qunatify the MPG difference between automatic and manual transmissions'
+The data we used is **mtcars** dataset which is readily available in R.The analyses will use the regression models to seek the answers. The report is composed of four main parts. 
+1. Exploratory Analysis
+2. Regression Analysis
+3. Residual Analysis
+4. Conclusions
+
+## 1. Exploratory Analysis
+
+The basic observation to do is to know the dataset before anything has done.
+Meaning of each variable in dataset and what kind of variables are composed in that dataset is important to investigate. The code chunk below will show some useful information about the dataset.
+
+- **mpg**:	 Miles/(US) gallon
+- **cyl**:	 Number of cylinders
+- **disp**:	 Displacement (cu.in.)
+- **hp**:	 Gross horsepower
+- **drat**:	 Rear axle ratio
+- **wt**:	 Weight (lb/1000)
+- **qsec**:	 1/4 mile time
+- **vs**:	 V/S
+- **am**:	 Transmission (0 = automatic, 1 = manual)
+- **gear**:	 Number of forward gears
+- **carb**:	 Number of carburetors
+
+The data has 11 variables with 32 observatrions. It is clearly seen that the data is comprised of many factor variables. Now, let's look at the data structure.
+
+```{r, echo=TRUE}
+# data loading
+library(datasets)
+data(mtcars)
+
+# data structure
+print(str(mtcars))
+```
+
+We need some work to convert that **num** objects to their respective data type. The factor variables in this dataset are **gear**,**cyl**,**vs**,**carb** and **am**. Among those factor variables we are interested in **am** and to understand it better the level of that variable is also renamed.
+
+```{r, echo=TRUE}
+#data wrangling
+mtcars$cyl <- as.factor(mtcars$cyl); mtcars$vs <- as.factor(mtcars$vs)
+mtcars$gear <- as.factor(mtcars$gear); mtcars$carb <- as.factor(mtcars$carb)
+mtcars$am <- as.factor(mtcars$am)
+
+#renaming the level
+levels(mtcars$am) <- c("Auto", "Manual")
+```
+
+The relationships between the variables the scatter plots is produced to obeserve each variable against all others. That pairs graph is shown in Appendix figure 1. Those scatter plots clearly show that Mile per gallon(MPG) tends to correlate well with many of the other variables.
+Mile per gallon(MPG) and transmission types (am) are the particularly interesting variables. The box plot between these two variables is also shown in Appendix figure 2. This figure indicates that Manual Transmission tends to present larger values of mpg than the automatic ones.
+
+## 2. Regression Analysis
+
+Among many regression models, linear models should be chosen as the outcome we expected is neither binary nor count variable. First of all, as a direct implementation of the first question, the model is fitted with **mpg** as outcome with **am** regressor.
+
+```{r, echo=TRUE}
+simple_fit <- lm(mpg ~ am, mtcars)
+summary(simple_fit)
+```
+The model is statistically significant. with p value less than 0.05. however, R-sqaured value is 0.3598 which can be interpreted as '35 percent of total variation in **mpg** is explained by **am**. It is too low to keep the model. 
+The model is fitted again with all the variables in the datasets except **mpg**.
+
+```{r, echo=TRUE}
+fit_all <- lm(mpg ~ ., mtcars)
+summary(fit_all)
+```
+When we look at the summary, Adjusted R-squared is 77.9% and it also solve the statistical significance. 
+The first column of the Appendix figure 1 suggests that **dart**, **qesc**, **gear** and **carb** would have less impact on **mpg**. The graph also shows multicollinearity in independent variables. Correlation between numeric independent variables are as follow.
+
+```{r, echo=TRUE}
+cor(mtcars[c('disp','hp','drat','wt','qsec')])
+```
+Most of the values are greater then 0.7 which indicate that those are highly correlated to each other. It indicates that changes in one variable are associated with shifts in another variable. The stronger the correlation, the more difficult it is to change one variable without changing another.
+So, instead of refitting the model, R programming provide **step** function.This function will perform the selection by calling *lm* repeatedly. It selects the best variables to use in predicting mpg with the *Akaike information criterion* that implements both forward selection and backward elimination.
+
+```{r, echo=TRUE}
+best_fit <- step(fit_all,direction='both',trace = 0)
+summary(best_fit)
+```
+
+Best fit eliminated most of the highly correlated variables. The models are then compared with *anova* function. 
+
+```{r, echo=TRUE}
+anova(simple_fit,best_fit,fit_all)
+```
+P-value of *best_fit* model is significant compared to *fit_all* model. It means that we can confidently **reject Null Hypothesis**. Now, the coefficient of *best_fit* model is checked.
+
+```{r, echo=TRUE}
+best_fit$coefficients
+```
+Manual transmission coefficient in this model is 1.81 which can be interpreted as the expected value of **mpg** with manual transmission is 1.81 larger than that of with automatic transmission. Confidence interval of **amManual** can also be observed.
+
+```{r, echo=TRUE}
+confint(best_fit,'amManual')
+```
+## 3. Residual Analysis
+
+We now check the influence measures to the selected model.It is possible for a single observation to have a great influence on the results of a regression analysis. It is therefore important to detect influential observations and to take them into consideration when interpreting the results. *dfbetas* function gives the data points that influence the model coefficient most. We are interested  data points influence on **amManual** coefficient.
+
+```{r, echo=TRUE}
+coeff <- dfbetas(best_fit)
+amManual_coef <- coeff[,6]
+head(sort(amManual_coef,decreasing = TRUE))
+```
+These six data points are influence most but they are not greated than 1.
+*hatvalues* function gives the measure of leverage.
+
+```{r, echo=TRUE}
+leverage <- hatvalues(best_fit)
+head(sort(leverage,decreasing = TRUE))
+```
+Toyota Corona and Chrysler Imperial are far from fitted line and has some impact **amManual** coefficient.
+
+We now look at the diagnostics of our chosen model. Residual plots can be found in the Appendix figure 3. The assumptions of models are
+- Outcome can be expressed as linear function of regressors
+- Variation of observations around the regression line is constant (homoscedasticity)
+- Outcomes are normally distributed.
+In **Residual vs Fitted** graph, the red line is not much flat. It suggests that the linear assumption is not met. There is no pattern in this graph so the variation is constant. And there is no non-constant variance which means there is no **Heteroskedasticity**.
+For **Normal Q-Q**, the error are somewhat normally distributed.
+In **Scale-Location** plot, there are some potential points of interest in the plots that may indicate values of increased leverage of outliers.
+
+
+## 4. Conclusions
+
+In summary, we have performed fairly robust model fits although there is some potential of being non-linearity. The selected model perform and explain a lot better than simple linear model with only variable.
+Confiendence interval does not strongly indicate the statement of the interpretation of coefficient as described above. 95 out 100 cases, the correlation between **amManual** and **mpg** is between -1.061 and 4.8. So, it can be greater positive impact or slight negative impact on **mpg**.
+If we have more observations available,they could help us better answer the second question about: Quantify the MPG difference between automatica and manual transmissions? The database with only 32 observations may not have been enough to answer more clearly the second question.
+
+
+\newpage
+
+```{css, echo=FALSE}
+h1 {
+ text-align: center;
+}
+```
+# APPENDIX - GRAPHICS
+
+### Figure 1 : Pairs graph
+
+```{r, fig.width = 10, fig.height = 10}
+pairs(mtcars, panel = panel.smooth, main = "MTCARS PAIRS GRAPHS")
+```
+
+### Figure 2 : Boxplots of "mpg" versus "am"
+
+```{r,echo=TRUE}
+library(ggplot2)
+transTyp <- ggplot(aes(x=am, y=mpg), data=mtcars) + geom_boxplot(aes(fill=am))
+transTyp <- transTyp + labs(title = "Automatic vs Manual Transmission Boxplot")
+transTyp <- transTyp + xlab("Transmission Type")+ ylab("MPG")
+transTyp <- transTyp + labs(fill = "Transmission Types")
+transTyp <- transTyp + theme(plot.title = element_text(hjust = 0.5))
+transTyp
+```
+
+### Figure 3 : Residual plots for selected model
+
+
+```{r, fig.width = 10, fig.height = 10}
+par(mfrow = c(2, 2))
+plot(best_fit)
+```
